@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Usage:
+#
+#     $ bin/compile <build-dir> <cache-dir> <env-path>
+
+# Fail fast and fail hard.
+#set -eo pipefail
+
+indent() {
+  sed -u 's/^/       /'
+}
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+PATH="$BUILD_DIR/local/bin:$PATH"
+
+export PERL5LIB="$BUILD_DIR/local/lib/perl5"
+
+PERL_CPANM_OPT="--quiet --notest -l $BUILD_DIR/local"
+if [ -f $ENV_DIR/PERL_CPANM_OPT ]; then
+  PERL_CPANM_OPT="$PERL_CPANM_OPT $(cat $ENV_DIR/PERL_CPANM_OPT)"
+fi
+export PERL_CPANM_OPT
+
+rm -rf $BUILD_DIR/local
+if [ -d $CACHE_DIR/local ]; then
+  cp -a $CACHE_DIR/local $BUILD_DIR/local
+fi
+
+cd $BUILD_DIR
+
+if ! [ -e $BUILD_DIR/local/bin/cpanm ]; then
+  echo "-----> Bootstrapping cpanm"
+  curl -L --silent https://raw.github.com/miyagawa/cpanminus/master/cpanm | perl - App::cpanminus 2>&1 | indent
+fi
+
+echo "-----> Installing dependencies"
+echo "cpanm options: $PERL_CPANM_OPT" | indent
+cpanm --installdeps . 2>&1 | indent
+
+#echo "-----> Installing Starman"
+#cpanm Starman 2>&1 | indent
+
+if ! [ -e $BUILD_DIR/local/bin/jwhois ]; then
+  echo "-----> Install jwhois"
+  cd /tmp
+
+  curl -L --silent -O https://raw.githubusercontent.com/fukuko/jwhois-4.0/master/jwhois-4.0.tar.gz
+
+  tar zxvf jwhois-4.0.tar.gz
+
+  cd jwhois-4.0/
+  
+  echo "-----> ipv6socket.patch jwhois"
+  
+  curl -L --silent -O https://raw.githubusercontent.com/fukuko/jwhois-4.0/master/jwhois-4.0-fix-ipv6socket.patch
+  
+  patch -p1 < jwhois-4.0-fix-ipv6socket.patch
+  
+  cd example/
+
+  echo "-----> Get jwhois.conf"
+  
+  mv jwhois.conf jwhois.conf.org
+  
+  curl -L --silent -O https://raw.githubusercontent.com/fukuko/jwhois-4.0/master/jwhois.conf
+  
+  cd ../
+  
+  echo "-----> Configure jwhois"
+  
+  ./configure --prefix=$BUILD_DIR/local
+  
+  echo "-----> Make jwhois"
+  
+  make
+  
+  echo "-----> Make install jwhois"
+  
+  make install
+  
+  cd $BUILD_DIR/local/bin
+  
+  ln -s jwhois whois
+  
+  cd $BUILD_DIR
+fi
+if [ -d $BUILD_DIR/local/lib/perl5/Email/Sender/Transport ]; then
+	if ! [ -e $BUILD_DIR/local/lib/perl5/Email/Sender/Transport/GmailSMTP.pm ]; then
+	  echo "-----> Install GmailSMTP.pm"
+	  
+	  cd $BUILD_DIR/local/lib/perl5/Email/Sender/Transport
+	  
+	  curl -L --silent -O https://raw.githubusercontent.com/fukuko/GmailSMTP/master/GmailSMTP.pm
+	  
+	  cd $BUILD_DIR
+	fi
+
+	if ! grep "Email::Sender::Transport::SMTPS" $BUILD_DIR/local/lib/perl5/Email/Sender/Transport/GmailSMTP.pm >/dev/null 2>&1; then
+	  echo "-----> Install GmailSMTP.pm"
+	  
+	  cd $BUILD_DIR/local/lib/perl5/Email/Sender/Transport
+	  
+	  curl -L --silent -O https://raw.githubusercontent.com/fukuko/GmailSMTP/master/GmailSMTP.pm
+	  
+	  cd $BUILD_DIR
+	fi
+fi
+if [ -d $BUILD_DIR/local ]; then
+  rm -rf $CACHE_DIR/local
+  mkdir -p $CACHE_DIR
+  cp -a $BUILD_DIR/local $CACHE_DIR/local
+fi
