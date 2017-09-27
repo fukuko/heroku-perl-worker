@@ -24,6 +24,13 @@ if [ -f $ENV_DIR/PERL_CPANM_OPT ]; then
 fi
 export PERL_CPANM_OPT
 
+if ! [ -e $CACHE_DIR/local/lib/perl5/Email/Sender/Transport/GmailSMTP.pm ]; then
+echo "-----> Delete Perl lib Dir"
+
+rm -fr $CACHE_DIR/local/lib/perl5
+
+fi
+
 rm -rf $BUILD_DIR/local
 if [ -d $CACHE_DIR/local ]; then
   cp -a $CACHE_DIR/local $BUILD_DIR/local
